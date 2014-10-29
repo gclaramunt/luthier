@@ -37,7 +37,9 @@ import language._
 
 object Poll extends {
 
-  class PollAskableEndpoint[A <: Askable, P](f: Flow, endpoint: EndpointFactory[A], initialDelay: FiniteDuration, every: FiniteDuration, message: P)(implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]) extends endpoint.base.BaseSource {
+  class PollAskableEndpoint[A <: Askable, P](f: Flow, endpoint: EndpointFactory[A], initialDelay: FiniteDuration, every: FiniteDuration,
+                                             message: P)(implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]
+  ) extends endpoint.base.BaseSource {
     lazy val dest = endpoint(f)
     type Payload = A#Response
     var scheduledAction: akka.actor.Cancellable = _
@@ -58,7 +60,8 @@ object Poll extends {
     }
     val flow = f
   }
-  class PollPullable[A <: Pullable](f: Flow, endpoint: EndpointFactory[A], initialDelay: FiniteDuration, every: FiniteDuration) extends endpoint.base.BaseSource {
+  class PollPullable[A <: Pullable](f: Flow, endpoint: EndpointFactory[A], initialDelay: FiniteDuration, every: FiniteDuration
+  ) extends endpoint.base.BaseSource {
     lazy val dest = endpoint(f)
     type Payload = A#Payload
 
@@ -70,8 +73,8 @@ object Poll extends {
         flow.log.debug(s"Flow ${flow.name} polling")
         dest.pull()(newReceviedMessage(())) onComplete {
           case Success(response)  => messageArrived(response.asInstanceOf[Message[Payload]])
-    
-      case Failure(err) => flow.log.error(err, s"Poller ${flow.name} failed")
+
+          case Failure(err) => flow.log.error(err, s"Poller ${flow.name} failed")
         }
       }
     }
@@ -81,13 +84,18 @@ object Poll extends {
     }
     val flow = f
   }
-  private case class EFA[A <: Askable, P](endpoint: EndpointFactory[A], every: FiniteDuration, message: P, initialDelay: FiniteDuration)(implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]) extends EndpointFactory[PollAskableEndpoint[A, P]] {
+  private case class EFA[A <: Askable, P](endpoint: EndpointFactory[A], every: FiniteDuration, message: P, initialDelay: FiniteDuration)(
+    implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]) extends EndpointFactory[PollAskableEndpoint[A, P]] {
     def apply(f: Flow) = new PollAskableEndpoint(f, endpoint, initialDelay, every, message)
   }
-  private case class EFP[A <: Pullable, P](endpoint: EndpointFactory[A], every: FiniteDuration, initialDelay: FiniteDuration) extends EndpointFactory[PollPullable[A]] {
+  private case class EFP[A <: Pullable, P](endpoint: EndpointFactory[A], every: FiniteDuration, initialDelay: FiniteDuration
+  ) extends EndpointFactory[PollPullable[A]] {
     def apply(f: Flow) = new PollPullable(f, endpoint, initialDelay, every)
   }
 
-  def asking[A <: Askable, P](endpoint: EndpointFactory[A], every: FiniteDuration, message: P, initialDelay: FiniteDuration = Duration.Zero)(implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]): EndpointFactory[PollAskableEndpoint[A, P]] = EFA(endpoint, every, message, initialDelay)
-  def pulling[A <: Pullable](endpoint: EndpointFactory[A], every: FiniteDuration, initialDelay: FiniteDuration = Duration.Zero): EndpointFactory[PollPullable[A]] = EFP(endpoint, every, initialDelay)
+  def asking[A <: Askable, P](endpoint: EndpointFactory[A], every: FiniteDuration, message: P, initialDelay: FiniteDuration = Duration.Zero)(
+    implicit ev: TypeSupportedByTransport[A#SupportedTypes, P]): EndpointFactory[PollAskableEndpoint[A, P]] = EFA(endpoint, every, message,
+                                                                                                                  initialDelay)
+  def pulling[A <: Pullable](endpoint: EndpointFactory[A], every: FiniteDuration, initialDelay: FiniteDuration = Duration.Zero
+  ): EndpointFactory[PollPullable[A]] = EFP(endpoint, every, initialDelay)
 }

@@ -105,11 +105,11 @@ trait BaseResponsible extends Responsible with IoExecutionContext {
  *
  */
 trait BasePullable extends Pullable with IoExecutionContext {
-  def pull()(implicit mf: MessageFactory): Future[Message[Payload]] = {
+  def pull()(implicit mf: MessageFactory): Future[Message[OneOf[_, PossibleResponses]]] = {
     Future { retrieveMessage(mf) }
   }
 
-  protected def retrieveMessage(mf: MessageFactory): Message[Payload]
+  protected def retrieveMessage(mf: MessageFactory): Message[OneOf[_, PossibleResponses]]
 }
 
 /**

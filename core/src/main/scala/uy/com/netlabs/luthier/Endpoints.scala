@@ -62,16 +62,11 @@ trait InboundEndpoint extends Endpoint {
 }
 
 object InboundEndpoint {
-  type AsOneWay[S <: Source] = Source { type PossiblePayloads = S#PossiblePayloads }
-  type AsRequestResponse[R <: Responsible] = Responsible {
-    type PossiblePayloads = R#PossiblePayloads
-    type SupportedResponseTypes = R#SupportedResponseTypes
-  }
   implicit class SelectOneWay[S <: Source](val s: S) {
-    def asSource = s.asInstanceOf[AsOneWay[S]]
+    def asSource = s.asInstanceOf[Source.Generic[S]]
   }
   implicit class SelectRequestResponse[R <: Responsible](val r: R) {
-    def asResponsible = r.asInstanceOf[AsRequestResponse[R]]
+    def asResponsible = r.asInstanceOf[Responsible.Generic[R]]
   }
 }
 
@@ -80,12 +75,21 @@ trait Source extends InboundEndpoint {
   protected def onEventHandler: Message[Payload] => Future[Unit] = onEventHandler0
   def onEvent(thunk: Message[Payload] => Future[Unit]) { onEventHandler0 = thunk }
 }
+object Source {
+  type Generic[S <: Source] = Source { type PossiblePayloads = S#PossiblePayloads }
+}
 
 trait Responsible extends InboundEndpoint {
   type SupportedResponseTypes <: HList
   private[this] var onRequestHandler0: Message[Payload] => Future[Message[OneOf[_, SupportedResponseTypes]]] = _
   protected def onRequestHandler: Message[Payload] => Future[Message[OneOf[_, SupportedResponseTypes]]] = onRequestHandler0
   def onRequest(thunk: Message[Payload] => Future[Message[OneOf[_, SupportedResponseTypes]]]) { onRequestHandler0 = thunk }
+}
+object Responsible {
+  type Generic[R <: Responsible] = Responsible {
+    type PossiblePayloads = R#PossiblePayloads
+    type SupportedResponseTypes = R#SupportedResponseTypes
+  }
 }
 
 /* ****** Outgoing endpoints ****** */
@@ -108,15 +112,19 @@ trait Pushable extends OutboundEndpoint {
    */
   def push[Payload: SupportedType](msg: Message[Payload]): Future[Unit]
 }
+object Pushable {
+  type Generic[P <: Pushable] = Pushable { type SupportedTypes = P#SupportedTypes }
+}
 
 trait Askable extends OutboundEndpoint {
-  type Response <: Any
+  type PossibleResponses <: HList
   /**
    * Actual implementation for the ask method of the Askable endpoint.
    */
-  def ask[Payload: SupportedType](msg: Message[Payload], timeOut: FiniteDuration = 10.seconds): Future[Message[Response]]
+  def ask[Payload: SupportedType](msg: Message[Payload], timeOut: FiniteDuration = 10.seconds): Future[Message[OneOf[_, PossibleResponses]]]
 }
 object Askable {
+  type Generic[A <: Askable] = Askable { type SupportedTypes = A#SupportedTypes; type PossibleResponses = A#PossibleResponses }
   //  @scala.annotation.implicitNotFound("There is no definition that states that ${Req} is replied with ${Resp}")
   //  trait CallDefinition[Req, Resp]
   //
@@ -131,7 +139,10 @@ object Askable {
 /* ******* Other Endpoints ****** */
 
 trait Pullable extends Endpoint {
-  type Payload <: Any
-  def pull()(implicit mf: MessageFactory): Future[Message[Payload]]
+  type PossibleResponses <: HList
+  def pull()(implicit mf: MessageFactory): Future[Message[OneOf[_, PossibleResponses]]]
+}
+object Pullable {
+  type Generic[P <: Pullable] = Pullable { type PossibleResponses = P#PossibleResponses }
 }
 

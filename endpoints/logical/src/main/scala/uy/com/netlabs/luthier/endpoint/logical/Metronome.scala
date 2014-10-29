@@ -32,16 +32,17 @@ package uy.com.netlabs.luthier
 package endpoint.logical
 
 import scala.concurrent.duration._
+import shapeless._
 import uy.com.netlabs.luthier.EndpointFactory
 import uy.com.netlabs.luthier.Flow
 
 class Metronome[P](f: Flow, pulse: P, initialDelay: FiniteDuration, every: FiniteDuration) extends endpoint.base.BaseSource {
-  type Payload = P
+  type PossiblePayloads = P :: HNil
 
   var scheduledAction: akka.actor.Cancellable = _
   def start() {
     scheduledAction = flow.schedule(initialDelay, every) {
-      messageArrived(Message(pulse))
+      messageArrived(newReceviedMessage(pulse))
     }
   }
   def dispose() {

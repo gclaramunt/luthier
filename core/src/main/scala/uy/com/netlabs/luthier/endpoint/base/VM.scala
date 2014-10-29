@@ -163,25 +163,32 @@ class VM private[VM] (val appContext: AppContext) {
   // Outbound endpoints
   //////////////////////////////////////////////////////////////////////
 
-  class VmOutboundEndpoint[OutSupportedTypes <: HList, ExpectedResponse] private[VM] (
-    val flow: Flow, val actorPath: String) extends Pushable with Askable {
+  class VmOutboundEndpoint[OutSupportedTypes <: HList, ExpectedResponse <: HList] private[VM] (
+    val flow: Flow, val actorPath: String)(implicit classTags: ClassTags[ExpectedResponse]) extends Pushable with Askable {
     override type SupportedTypes = OutSupportedTypes
-    override type Response = ExpectedResponse
+    override type PossibleResponses = ExpectedResponse
     protected def destActor = appContext.actorSystem.actorSelection(actorPath)
     override def start() {}
     override def dispose() {}
     override def push[Payload: SupportedType](msg: Message[Payload]): Future[Unit] = Future.successful(destActor.tell(msg.payload, null))
-    override def ask[Payload: SupportedType](msg: Message[Payload], timeOut: FiniteDuration): Future[Message[Response]] = {
-      akka.pattern.ask(destActor).?(msg.payload)(timeOut).map(r => msg.map(_ => r.asInstanceOf[Response]))(appContext.actorSystem.dispatcher)
+    override def ask[Payload: SupportedType](msg: Message[Payload], timeOut: FiniteDuration): Future[Message[OneOf[_, PossibleResponses]]] = {
+      akka.pattern.ask(destActor).?(msg.payload)(timeOut).map { r =>
+        if (classTags checkInstance r) msg.map(_ => new OneOf[Any, PossibleResponses](r)(null))
+        else throw new ClassCastException("Response's type is one of " + classTags.possibleClasses)
+      }(appContext.actorSystem.dispatcher)
     }
   }
-  case class VmOutboundEndpointFactory[OutSupportedTypes <: HList, ExpectedResponse] private[VM] (
-    actorPath: String) extends EndpointFactory[VmOutboundEndpoint[OutSupportedTypes, ExpectedResponse]] {
+  case class VmOutboundEndpointFactory[OutSupportedTypes <: HList, ExpectedResponse <: HList] private[VM] (
+    actorPath: String)(implicit classTags: ClassTags[ExpectedResponse]
+  ) extends EndpointFactory[VmOutboundEndpoint[OutSupportedTypes, ExpectedResponse]] {
     override def apply(f) = new VmOutboundEndpoint[OutSupportedTypes, ExpectedResponse](f, actorPath)
   }
 
-  def sink[Out](actorPath: String) = VmOutboundEndpointFactory[Out :: HNil, Any](actorPath)
-  def ref[Out, ExpectedResponse](actorPath: String) = VmOutboundEndpointFactory[Out :: HNil, ExpectedResponse](actorPath)
+  def sink[Out](actorPath: String): EndpointFactory[Pushable.Generic[VmOutboundEndpoint[Out :: HNil, HNil]]] =
+    VmOutboundEndpointFactory[Out :: HNil, HNil](actorPath)
+  def ref[Out, ExpectedResponse <: HList](actorPath: String)(implicit classTags: ClassTags[ExpectedResponse]
+  ): EndpointFactory[Askable.Generic[VmOutboundEndpoint[Out :: HNil, ExpectedResponse]]] =
+    VmOutboundEndpointFactory[Out :: HNil, ExpectedResponse](actorPath)
 }
 object VM {
   def forAppContext(ac: AppContext) = new VM(ac)

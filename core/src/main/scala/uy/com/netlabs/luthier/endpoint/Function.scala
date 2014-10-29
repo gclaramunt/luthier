@@ -38,15 +38,15 @@ import typelist._
 object Function {
   class FunctionPull[R] private[Function] (f: Flow, function: () => R, ioThreads: Int) extends endpoint.base.BasePullable with Askable {
     val flow = f
-    type Payload = R
-    type Response = R
+    import flow._
+    type PossibleResponses = R :: HNil
     type SupportedTypes = Function0[R] :: HNil
 
     val ioProfile = base.IoProfile.threadPool(ioThreads, flow.name + "-function-ep")
-    protected def retrieveMessage(mf): Message[Payload] = mf(function())
+    protected def retrieveMessage(mf): Message[OneOf[_, PossibleResponses]] = mf(function())
 
-    override def ask[Payload: SupportedType](msg, timeOut): Future[Message[Response]] = {
-      Future(msg.as[Function0[R]] map (_()))
+    override def ask[Payload: SupportedType](msg, timeOut): Future[Message[OneOf[_, PossibleResponses]]] = {
+      Future(msg.as[Function0[R]] map (f => f()))
     }
 
     def start() {
@@ -58,6 +58,6 @@ object Function {
   private case class EF[R](function: () => R, ioThreads: Int = 1) extends EndpointFactory[FunctionPull[R]] {
     def apply(f: Flow) = new FunctionPull(f, function, ioThreads)
   }
-  def pull[R](function: => R, ioThreads: Int = 1): EndpointFactory[Pullable {type Payload = R}] = EF[R](() => function, ioThreads)
-  def ask[R](ioThreads: Int = 1): EndpointFactory[Askable {type Response = R; type SupportedTypes = FunctionPull[R]#SupportedTypes}] = EF[R](null, ioThreads)
+  def pull[R](function: => R, ioThreads: Int = 1): EndpointFactory[Pullable.Generic[FunctionPull[R]]] = EF[R](() => function, ioThreads)
+  def ask[R](ioThreads: Int = 1): EndpointFactory[Askable.Generic[FunctionPull[R]]] = EF[R](null, ioThreads)
 }
