@@ -80,12 +80,12 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
   def pagingFlow(flows: Flows, throwExceptionOnIndexOutOfBound: Boolean): Flow = {
     import flows._
     val Vm = endpoint.base.VM.forAppContext(appContext)
-    new Flow("paging endpoint")(Vm.responsible[java.lang.Integer, <::<[Seq[Person]] :: HNil]("pagingEndpoint")) {
+    new Flow("paging endpoint")(Vm.responsible[java.lang.Integer :: HNil, <::<[Seq[Person]] :: HNil]("pagingEndpoint")) {
       logic {in =>
-        if (in.payload >= 10) {
+        if (in.payload.value >= 10) {
           if (throwExceptionOnIndexOutOfBound) throw new Exception("Invalid index exception")
           else in map (_ => Seq.empty)
-        } else in map (_ => Seq.tabulate(10)(i => Person(s"RandomName${in.payload}$i", s"LastName${in.payload}$i", scala.util.Random.nextInt(50) + 5)))
+        } else in map (_ => Seq.tabulate(10)(i => Person(s"RandomName${in.payload.value}$i", s"LastName${in.payload.value}$i", scala.util.Random.nextInt(50) + 5)))
       }
     }
   }

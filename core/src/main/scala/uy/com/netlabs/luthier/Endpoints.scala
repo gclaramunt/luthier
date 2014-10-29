@@ -50,18 +50,21 @@ trait EndpointFactory[+E <: Endpoint] extends Equals {
 /* ****** Inbound endpoints ****** */
 
 trait InboundEndpoint extends Endpoint {
-  type Payload <: Any
+  type PossiblePayloads <: HList
+  type SupportedPayload[Payload] = TypeSupportedByTransport[PossiblePayloads, Payload]
+  type Payload = OneOf[_, PossiblePayloads]
   type Throttler
 
   def throttler: Throttler = null.asInstanceOf[Throttler]
 
-  def newReceviedMessage[P](payload: P) = Message(payload)
+  final def newReceviedMessage[P: SupportedPayload](payload: P): Message[Payload] = newReceviedMessage(new OneOf[P, PossiblePayloads](payload)(null))
+  def newReceviedMessage[P](payload: OneOf[P, PossiblePayloads]): Message[Payload] = Message(payload)
 }
 
 object InboundEndpoint {
-  type AsOneWay[S <: Source] = Source { type Payload = S#Payload }
+  type AsOneWay[S <: Source] = Source { type PossiblePayloads = S#PossiblePayloads }
   type AsRequestResponse[R <: Responsible] = Responsible {
-    type Payload = R#Payload
+    type PossiblePayloads = R#PossiblePayloads
     type SupportedResponseTypes = R#SupportedResponseTypes
   }
   implicit class SelectOneWay[S <: Source](val s: S) {

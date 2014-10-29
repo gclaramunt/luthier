@@ -44,24 +44,24 @@ import shapeless._
 class VM private[VM] (val appContext: AppContext) {
 
   val log = akka.event.Logging(appContext.actorSystem, this)(new akka.event.LogSource[VM] {
-    def genString(f) = f.appContext.name + ":VM"
-  })
+      def genString(f) = f.appContext.name + ":VM"
+    })
   //Supervisor of all instantiated endpoints
   private[VM] class SetupEndpoint(val actorFactory: () => Actor, val actorName: String)
   private[VM] class KillEndpoint(val ref: ActorRef)
   private[VM] val endpointsSupervisor = try {
     appContext.actorSystem.actorOf(Props(new Actor {
-      log.info(s"Supervisor endpoint created for actor system ${appContext.actorSystem}")
-      def receive = {
-        case s: SetupEndpoint =>
-          val ref = context.actorOf(Props(s.actorFactory()), s.actorName)
-          log.debug(s"$ref registered by $sender")
-          sender ! ref
-        case k: KillEndpoint =>
-          sender ! context.stop(k.ref)
-          log.debug(s"${k.ref} stopped by $sender")
-      }
-    }), "VM")
+          log.info(s"Supervisor endpoint created for actor system ${appContext.actorSystem}")
+          def receive = {
+            case s: SetupEndpoint =>
+              val ref = context.actorOf(Props(s.actorFactory()), s.actorName)
+              log.debug(s"$ref registered by $sender")
+              sender ! ref
+            case k: KillEndpoint =>
+              sender ! context.stop(k.ref)
+              log.debug(s"${k.ref} stopped by $sender")
+          }
+        }), "VM")
   } catch {
     case e: InvalidActorNameException =>
       log.info(s"Supervisor endpoint found already created in actor system ${appContext.actorSystem}")
@@ -87,7 +87,7 @@ class VM private[VM] (val appContext: AppContext) {
 
     def start() {
       val creationFuture = akka.pattern.ask(endpointsSupervisor).ask(new SetupEndpoint(() => newReceiverActor, actorPath))(500.millis).
-        map(e => e.asInstanceOf[ActorRef])(appContext.actorSystem.dispatcher)
+      map(e => e.asInstanceOf[ActorRef])(appContext.actorSystem.dispatcher)
       _endpointActor = Await.result(creationFuture, 500.millis)
     }
     def dispose() {
@@ -96,40 +96,49 @@ class VM private[VM] (val appContext: AppContext) {
     }
   }
 
-  class VMSourceEndpoint[ExpectedType: ClassTag] private[VM] (val flow: Flow, val actorPath: String) extends BaseSource with VmInboundEndpointBase {
-    type Payload = ExpectedType
-    val expectedTypeClass = classTag[ExpectedType].runtimeClass
+  case class ClassTags[H <: HList](val classTags: HList) {
+    val possibleClasses = classTags.toList.asInstanceOf[List[ClassTag[_]]].map(_.runtimeClass)
+    def checkInstance(i: Any): Boolean = {
+      possibleClasses.exists(_.isInstance(i))
+    }
+  }
+  object ClassTags {
+    implicit def classTagsForHNil: ClassTags[HNil] = ClassTags[HNil](HNil)
+    implicit def classTagsForTail[H, T <: HList](implicit ct: ClassTag[H], tail: ClassTags[T]): ClassTags[H :: T] = ClassTags[H :: T](ct :: tail.classTags)
+  }
+
+
+  class VMSourceEndpoint[ReqTypes <: HList] private[VM] (val flow: Flow, val actorPath: String)(implicit classTags: ClassTags[ReqTypes]) extends BaseSource with VmInboundEndpointBase {
+    type PossiblePayloads = ReqTypes
     def newReceiverActor = new Actor {
       def receive = {
         case msg =>
-          try {
-            messageArrived(newReceviedMessage(expectedTypeClass.cast(msg).asInstanceOf[Payload]))
-          } catch {
-            case e: ClassCastException =>
-              log.error(s"Received on $actorPath a message of type ${msg.getClass.getName} but this actor is typed as ${expectedTypeClass.getName}. Message ignored")
+          if (classTags checkInstance msg) {
+            messageArrived(newReceviedMessage(msg)(null))
+          } else {
+            log.error(s"Received on $actorPath a message of type ${msg.getClass.getName} but this actor is typed as ${classTags.possibleClasses.mkString(", ")}. Message ignored")
           }
       }
     }
   }
-  case class SourceEndpointFactory[ExpectedType: ClassTag] private[VM] (actorPath: String) extends EndpointFactory[VMSourceEndpoint[ExpectedType]] {
-    def apply(f) = new VMSourceEndpoint[ExpectedType](f, actorPath)
+  case class SourceEndpointFactory[ReqTypes <: HList] private[VM] (actorPath: String)(implicit classTags: ClassTags[ReqTypes]) extends EndpointFactory[VMSourceEndpoint[ReqTypes]] {
+    def apply(f) = new VMSourceEndpoint[ReqTypes](f, actorPath)
   }
 
-  def source[ExpectedType: ClassTag](actorPath: String) = SourceEndpointFactory[ExpectedType](actorPath)
+  def source[ReqTypes <: HList](actorPath: String)(implicit classTags: ClassTags[ReqTypes]) = SourceEndpointFactory[ReqTypes](actorPath)
 
-  class VMResponsibleEndpoint[ReqType: ClassTag, ResponseType <: HList] private[VM] (
-    val flow: Flow, val actorPath: String) extends Responsible with VmInboundEndpointBase {
-    type Payload = ReqType
+
+  class VMResponsibleEndpoint[ReqTypes <: HList, ResponseType <: HList] private[VM] (
+    val flow: Flow, val actorPath: String)(implicit classTags: ClassTags[ReqTypes]) extends Responsible with VmInboundEndpointBase {
+    type PossiblePayloads = ReqTypes
     type SupportedResponseTypes = ResponseType
-    val expectedTypeClass = classTag[ReqType].runtimeClass
     def newReceiverActor = new Actor {
       def receive = {
         case msg =>
-          try {
-            requestArrived(newReceviedMessage(expectedTypeClass.cast(msg).asInstanceOf[Payload]), self, sender)
-          } catch {
-            case e: ClassCastException =>
-              log.error(s"Received on $actorPath a message of type ${msg.getClass.getName} but this actor is typed as ${expectedTypeClass.getName}. Message ignored")
+          if (classTags checkInstance msg) {
+            requestArrived(newReceviedMessage(msg)(null), self, sender)
+          } else {
+            log.error(s"Received on $actorPath a message of type ${msg.getClass.getName} but this actor is typed as ${classTags.possibleClasses.mkString(", ")}. Message ignored")
           }
       }
     }
@@ -144,11 +153,11 @@ class VM private[VM] (val appContext: AppContext) {
       f onFailure { case ex => log.error(ex, "Error on flow " + flow) }
     }
   }
-  case class ResponsibleEndpointFactory[ReqType: ClassTag, ResponseType <: HList] private[VM] (actorPath: String) extends EndpointFactory[VMResponsibleEndpoint[ReqType, ResponseType]] {
-    override def apply(f) = new VMResponsibleEndpoint[ReqType, ResponseType](f, actorPath)
+  case class ResponsibleEndpointFactory[ReqTypes <: HList, ResponseType <: HList] private[VM] (actorPath: String)(implicit classTags: ClassTags[ReqTypes]) extends EndpointFactory[VMResponsibleEndpoint[ReqTypes, ResponseType]] {
+    override def apply(f) = new VMResponsibleEndpoint[ReqTypes, ResponseType](f, actorPath)
   }
 
-  def responsible[ReqType: ClassTag, ResponseType <: HList](actorPath: String) = ResponsibleEndpointFactory[ReqType, ResponseType](actorPath)
+  def responsible[ReqTypes <: HList, ResponseType <: HList](actorPath: String)(implicit classTags: ClassTags[ReqTypes]) = ResponsibleEndpointFactory[ReqTypes, ResponseType](actorPath)
 
   //////////////////////////////////////////////////////////////////////
   // Outbound endpoints

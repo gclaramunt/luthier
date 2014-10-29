@@ -43,7 +43,7 @@ class FlowLogicMacroTest extends Flows {
   val appContext = AppContext.build("test")
 
   val Vm = VM.forAppContext(appContext)
-  new Flow("test")(Vm.responsible[Int, String :: <::<[Throwable] :: HNil]("test")) {
+  new Flow("test")(Vm.responsible[Int :: HNil, String :: <::<[Throwable] :: HNil]("test")) {
     logic { req =>
       implicitly[rootEndpoint.SupportedResponseTypes =:= InboundEndpointTpe#SupportedResponseTypes]
       implicitly[rootEndpoint.SupportedResponseTypes =:= (String :: <::<[Throwable] :: HNil)]

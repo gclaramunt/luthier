@@ -67,7 +67,7 @@ trait Flows {
     implicit def RequestResponse[In <: Responsible] = new ExchangePattern[In, Future[Message[OneOf[_, In#SupportedResponseTypes]]]] {
       private[Flows] def setup(endpoint, flow) {
         endpoint.onRequest{m =>
-          val res = flow.runFlow(m).mapTo[Future[Message[OneOf[_, endpoint.SupportedResponseTypes]]]] //the result of running the flow is the one this is being mappedTo, but is encapsulated in the florRun future, hence, flatten it
+          val res = flow.runFlow(m).asInstanceOf[Future[Future[Message[OneOf[_, endpoint.SupportedResponseTypes]]]]] //the result of running the flow is the one this is being mappedTo, but is encapsulated in the florRun future, hence, flatten it
           res.flatMap(identity)(flow.rawWorkerActorsExecutionContext)
         }
       }
@@ -113,7 +113,7 @@ trait Flows {
   }
   /**
    * Convenient method to execute a code in a flow run context.
-   * A special flow will be constructed for the passed code, it will run it immediately, and the be disposed.
+   * A special flow will be constructed for the passed code, it will run it immediately,a nd the be disposed.
    * This construct is useful when you must perform request using endpoints, instead of defining general purpose flows.
    *
    * '''Notes:''' Al methods that need an implicit MessageFactory, will need to be passed one explicitly (use the message)

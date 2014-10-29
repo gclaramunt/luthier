@@ -42,7 +42,7 @@ class FeedableEndpointTest extends BaseFlowsTest {
       new Flows {
         val appContext = testApp
         val fakeEndpoint: EndpointFactory[Source] = new base.DummySource
-        val requestor = new FeedableEndpoint.Requestor[String, Unit :: HNil]()
+        val requestor = new FeedableEndpoint.Requestor[String :: HNil, Unit :: HNil]()
         @volatile var toggled = false
         new Flow("test")(FeedableEndpoint.source(requestor)) {
           logic { m =>
@@ -56,9 +56,9 @@ class FeedableEndpointTest extends BaseFlowsTest {
     it("should support request-response feeding") {
       new Flows {
         val appContext = testApp
-        val requestor = new FeedableEndpoint.Requestor[String, Int :: HNil]()
+        val requestor = new FeedableEndpoint.Requestor[String :: HNil, Int :: HNil]()
         new Flow("test")(FeedableEndpoint.responsible(requestor)) {
-          logic { m => m.map(_.toInt)}
+          logic { m => m.map(_.value.toInt)}
         }.start()
         val res = Await.result(requestor.request("45"), 100.millis).valueAs[Int]
         assert(res === 45)
@@ -67,9 +67,9 @@ class FeedableEndpointTest extends BaseFlowsTest {
     it("should support returning exceptions thrown in the flow") {
       new Flows {
         val appContext = testApp
-        val requestor = new FeedableEndpoint.Requestor[String, Int :: HNil]()
+        val requestor = new FeedableEndpoint.Requestor[String :: HNil, Int :: HNil]()
         new Flow("test")(FeedableEndpoint.responsible(requestor)) {
-          logic { m => m.map(_.toInt) }
+          logic { m => m.map(_.value.toInt) }
         }.start()
         Await.result(requestor.request("not a number").failed, 100.millis)
       }

@@ -43,10 +43,10 @@ class VmEndpointTest extends BaseFlowsTest {
         val appContext = testApp
         val Vm = VM.forAppContext(appContext)
         val p = Promise[Unit]()
-        new Flow("source")(Vm.source[String]("the-test-actor")) {
+        new Flow("source")(Vm.source[String :: HNil]("the-test-actor")) {
           logic { msg =>
-            if (msg.payload == 42) { println("Error, 42 this should never happen!"); sys.exit(5) }
-            println("Message " + msg.payload + " arrived")
+            if (msg.payload.value == 42) { println("Error, 42 this should never happen!"); sys.exit(5) }
+            println("Message " + msg.payload.value + " arrived")
             p.trySuccess(())
           }
         }.start()
@@ -64,7 +64,7 @@ class VmEndpointTest extends BaseFlowsTest {
         val appContext = testApp
         val Vm = VM.forAppContext(appContext)
         val p = Promise[String]()
-        new Flow("responsible")(Vm.responsible[String, String :: HNil]("the-test-actor")) {
+        new Flow("responsible")(Vm.responsible[String :: HNil, String :: HNil]("the-test-actor")) {
           logic { msg =>
             if (true)
               msg.map(m => "Hello " + m)

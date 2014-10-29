@@ -41,13 +41,13 @@ import typelist._
  * future with the result of the flow.
  */
 object FeedableEndpoint {
-  class Requestor[Req, Resp <: HList]() {
-    private val pendingRequests = Ref(Vector.empty[(Req, Promise[OneOf[_, Resp]])])
+  class Requestor[Req <: HList, Resp <: HList]() {
+    private val pendingRequests = Ref(Vector.empty[(OneOf[_, Req], Promise[OneOf[_, Resp]])])
     private val connectedEndpoint = Ref.make[FeedableEndpointBase[Req, Resp]]()
-    def request(r: Req): Future[OneOf[_, Resp]] = {
+    def request[R](r: R)(implicit contained: Contained[Req, R]): Future[OneOf[_, Resp]] = {
       val res = Promise[OneOf[_, Resp]]()
       atomic { implicit tx =>
-        pendingRequests.transform(_ :+ r->res)
+        pendingRequests.transform(_ :+ new OneOf(r)(contained)->res)
         tryFeedEndpoint()
       }
       res.future
@@ -68,35 +68,35 @@ object FeedableEndpoint {
     }
   }
 
-  private[FeedableEndpoint] trait FeedableEndpointBase[Req, Resp <: HList] {
+  private[FeedableEndpoint] trait FeedableEndpointBase[Req <: HList, Resp <: HList] {
     def requestor: Requestor[Req, Resp]
-    def feed(r: Req): Future[OneOf[_, Resp]]
+    def feed(r: OneOf[_, Req]): Future[OneOf[_, Resp]]
   }
 
-  class FeedableSource[Req](val flow: Flow, val requestor: Requestor[Req, Unit :: HNil]) extends FeedableEndpointBase[Req, Unit :: HNil] with Source {
-    type Payload = Req
-    def feed(r: Req): Future[OneOf[_, Unit :: HNil]] = {
+  class FeedableSource[Req <: HList](val flow: Flow, val requestor: Requestor[Req, Unit :: HNil]) extends FeedableEndpointBase[Req, Unit :: HNil] with Source {
+    type PossiblePayloads = Req
+    def feed(r: OneOf[_, Req]): Future[OneOf[_, Unit :: HNil]] = {
       onEventHandler(newReceviedMessage(r)).map(m => new OneOf[Unit, Unit :: HNil](()))(flow.rawWorkerActorsExecutionContext)
     }
     def dispose(): Unit = {}
     def start(): Unit = requestor.connect(this)
   }
-  class FeedableResponsible[Req, Resp <: HList](val flow: Flow, val requestor: Requestor[Req, Resp]) extends FeedableEndpointBase[Req, Resp] with Responsible {
-    type Payload = Req
+  class FeedableResponsible[Req <: HList, Resp <: HList](val flow: Flow, val requestor: Requestor[Req, Resp]) extends FeedableEndpointBase[Req, Resp] with Responsible {
+    type PossiblePayloads = Req
     type SupportedResponseTypes = Resp
-    def feed(r: Req): Future[OneOf[_, Resp]] = {
+    def feed(r: OneOf[_, Req]): Future[OneOf[_, Resp]] = {
       onRequestHandler(newReceviedMessage(r)).map(_.payload)(flow.rawWorkerActorsExecutionContext)
     }
     def dispose(): Unit = {}
     def start(): Unit = requestor.connect(this)
   }
 
-  case class source[Req](requestor: Requestor[Req, Unit :: HNil]) extends EndpointFactory[FeedableSource[Req]] {
+  case class source[Req <: HList](requestor: Requestor[Req, Unit :: HNil]) extends EndpointFactory[FeedableSource[Req]] {
     def apply(f) = new FeedableSource[Req](f, requestor)
   }
-  def apply[Req](requestor: Requestor[Req, Unit :: HNil]) = source(requestor)
-  case class responsible[Req, Resp <: HList](requestor: Requestor[Req, Resp]) extends EndpointFactory[FeedableResponsible[Req, Resp]] {
+  def apply[Req <: HList](requestor: Requestor[Req, Unit :: HNil]) = source(requestor)
+  case class responsible[Req <: HList, Resp <: HList](requestor: Requestor[Req, Resp]) extends EndpointFactory[FeedableResponsible[Req, Resp]] {
     def apply(f) = new FeedableResponsible[Req, Resp](f, requestor)
   }
-  def apply[Req, Resp <: HList](requestor: Requestor[Req, Resp]) = responsible(requestor)
+  def apply[Req <: HList, Resp <: HList](requestor: Requestor[Req, Resp]) = responsible(requestor)
 }

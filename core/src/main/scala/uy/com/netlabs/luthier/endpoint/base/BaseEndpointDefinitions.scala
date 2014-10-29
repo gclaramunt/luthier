@@ -34,6 +34,7 @@ package endpoint.base
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util._
 import typelist._
+import shapeless._
 
 /**
  * Base implementation of Source.
@@ -67,7 +68,7 @@ class DummySource extends EndpointFactory[DummySource.DummySourceEndpoint] {
 }
 object DummySource {
   trait DummySourceEndpoint extends BaseSource {
-    type Payload = Unit
+    type PossiblePayloads = Unit :: HNil
     def runLogic()
   }
 }
