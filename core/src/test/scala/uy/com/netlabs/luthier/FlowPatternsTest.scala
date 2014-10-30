@@ -100,7 +100,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => ep.ask(msg.map(_ => i)) map {
               case Message(ex: Exception) => None
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
@@ -121,7 +121,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
@@ -142,12 +142,12 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => lastRequestedIndex = i; ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
             }}
-          pages.map(_ map (_.name)).next
+          pages.map(_.value map (_.name)).next
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         Await.result(res, 1.seconds)
         Thread.sleep(100) ///give enough time for a second page request
@@ -164,7 +164,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => lastRequestedIndex = i; ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
@@ -185,7 +185,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
@@ -205,12 +205,12 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
             }}
-          pages.map(_.filter(_.name endsWith "5")).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
+          pages.map(_.value.filter(_.name endsWith "5")).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         val persons = Await.result(res, 2.seconds)
         assert(persons.forall(_.name endsWith "5"), "Found persons:\n  " + persons.mkString("\n  "))
@@ -225,12 +225,12 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = paging(0){i => ep.ask(msg.map(_ => i)) map {
               case Message(persons) if persons.nonEmpty => Some(persons->(i+1))
               case _ => None
             }}
-          pages.flatMap(s => Future.successful(s.filter(_.name endsWith "5"))).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
+          pages.flatMap(s => Future.successful(s.value.filter(_.name endsWith "5"))).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         val persons = Await.result(res, 2.seconds)
         assert(persons.forall(_.name endsWith "5"), "Found persons:\n  " + persons.mkString("\n  "))
@@ -247,7 +247,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => (i => ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
@@ -268,7 +268,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => (i => ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
@@ -290,13 +290,13 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => {i => lastRequestedIndex = i; ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
                 case _ => None
               }}}
-          pages.map(_ map (_.name)).get(0)
+          pages.map(_.value map (_.name)).get(0)
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         Await.result(res, 1.seconds)
         Thread.sleep(100) ///give enough time for a second page request
@@ -313,7 +313,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => {i => lastRequestedIndex = i; ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
@@ -335,7 +335,7 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => (i => ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
@@ -356,13 +356,13 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => (i => ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
                 case _ => None
               })}
-          pages.map(_.filter(_.name endsWith "5")).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
+          pages.map(_.value.filter(_.name endsWith "5")).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         val persons = Await.result(res, 2.seconds)
         assert(persons.forall(_.name endsWith "5"), "Found persons:\n  " + persons.mkString("\n  "))
@@ -377,13 +377,13 @@ class FlowPatternsTest extends endpoint.BaseFlowsTest {
         val res = inFlow { (flow, msg) =>
           import flow._
           implicit val fr = msg.flowRun
-          val ep = Vm.ref[Int, Seq[Person]]("user/VM/pagingEndpoint")
+          val ep = Vm.ref[Int, Seq[Person] :: HNil]("user/VM/pagingEndpoint")
           val pages = indexedPaging(0){_ => (i => ep.ask(msg.map(_ => i)) map {
                 case Message(ex: Exception) => None
                 case Message(persons) if persons.nonEmpty => Some(persons)
                 case _ => None
               })}
-          pages.flatMap(s => Future.successful(s.filter(_.name endsWith "5"))).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
+          pages.flatMap(s => Future.successful(s.value.filter(_.name endsWith "5"))).fold(Seq.empty[Person])((msg, acc) => acc ++ msg)
         }.flatMap(identity)(appContext.actorSystem.dispatcher)
         val persons = Await.result(res, 2.seconds)
         assert(persons.forall(_.name endsWith "5"), "Found persons:\n  " + persons.mkString("\n  "))
